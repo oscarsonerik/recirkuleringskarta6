@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<!-- _need_to_change_datafileinfo_
+I denna mapstrukturen har jag ändrat varje variabel för hand i htmlfilen då jag exporterade en helt
+ny karta från QGIS. Det tog mycket längre tid men vore nog bättre i längden om det ända man ändrar i qgis filen
+
+Det visade sig senare under dagen att jag hade lite tur. Det krävdes nämligen att båda lagerfilerna för polygonerna har “Area” som namn i sin attribute. För om den ena heter “Arean” och den andra “Area” Så blir det fel. Dessvärre så kommer nu polygonen att visa dubbla areor om använderen har båda lagrena i klickade samtidigt.
+-->
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="css/leaflet.css">
+    <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+    <link rel="stylesheet" href="css/qgis2web.css">
+    <link rel="stylesheet" href="css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="css/leaflet-measure.css">
+    <style>
+        html,
+        body,
+        #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+    </style>
+    <title></title>
+</head>
+
+<body>
+    <div id="map">
+    </div>
+    <script src="js/qgis2web_expressions.js"></script>
+    <script src="js/leaflet.js"></script>
+    <script src="js/L.Control.Locate.min.js"></script>
+    <script src="js/leaflet.rotatedMarker.js"></script>
+    <script src="js/leaflet.pattern.js"></script>
+    <script src="js/leaflet-hash.js"></script>
+    <script src="js/Autolinker.min.js"></script>
+    <script src="js/rbush.min.js"></script>
+    <script src="js/labelgun.min.js"></script>
+    <script src="js/labels.js"></script>
+    <script src="js/leaflet-measure.js"></script>
+    <script src="data/Fastigheter_1.js"></script>
+    <script src="data/Byggnader_2.js"></script>
+    <script src="data/fastighetgrns_3.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <!-- Script för att ändra och påverka kartans beteende / utseende -->
+    <script>
+        // Funktion som ansvarar för att att ändra vad som är markerat med färg. "e" är inputen av eventet som skickas in. Ex. "click"
+        // Också ansvarig för att reseta färgen vid click på annan ställe
+        var highlightLayer;
+        var previousElement;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+            if (previousElement) {
+                for (i in previousElement._eventParents) {
+                    previousElement._eventParents[i].resetStyle(previousElement);
+                }
+            }
+            if (e.target.feature.geometry.type === 'LineString') {
+                highlightLayer.setStyle({
+                    color: '#fab12a',
+                });
+            } else {
+                highlightLayer.setStyle({
+                    fillColor: '#fab12a',
+                    fillOpacity: 1
+                });
+            }
+            previousElement = e.target;
+        }
+
+        // Skapar kartan, sätter zoomeninställningar
+        var map = L.map('map', {
+            zoomControl: true, maxZoom: 28, minZoom: 1, popupOptions: { className: 'leaflet-measure-resultpopup', autoPanPadding: [10, 10] }
+        })
+        // Listen for the 'load' event on the map
+        map.on('load', function() {
+        // Set the desired zoom level after the map has loaded
+        map.setZoom(15); // Adjust the zoom level as needed
+        });
+        // Leaflet-hash lets you to add dynamic URL hashes to web pages with Leaflet maps. You can easily link users to specific map views.
+        var hash = new L.Hash(map);
+        // Ger credits till packet för att få kartan att fungera
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a> &middot; <a href="https://turfjs.org/">Turf</a>');
+        // Autolinker, ett bibliotek --> automatiskt omvandla textsträngar som representerar länkar eller e-postadresser till klickbara länkar i HTML-dokument.
+        var autolinker = new Autolinker({ truncate: { length: 30, location: 'smart' } });
+        // Rensa tillfällig html som skapas i popup
+        function removeEmptyRowsFromPopupContent(content, feature) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var rows = tempDiv.querySelectorAll('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var td = rows[i].querySelector('td.visible-with-data');
+                var key = td ? td.id : '';
+                if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                    rows[i].parentNode.removeChild(rows[i]);
+                }
+            }
+            return tempDiv.innerHTML;
+        }
+        // Denna kod fäster en händelselyssnare till .leaflet-popup-pane elementet som lyssnar efter "load" händelsen. När en "load" händelse inträffar på .leaflet-popup-pane elementet, körs den tillhörande funktionen.
+        document.querySelector(".leaflet-popup-pane").addEventListener("load", function (event) {
+            var tagName = event.target.tagName,
+                popup = map._popup;
+            // Also check if flag is already set.
+            if (tagName === "IMG" && popup && !popup._updated) {
+                popup._updated = true; // Set flag to prevent looping.
+                popup.update();
+            }
+        }, true);
+        // Ger möjlighet att snabbt zooma till sin egna plats i kartan
+        //L.control.locate({ locateOptions: { maxZoom: 19 } }).addTo(map);
+
+        // Original code for measurement tool 
+        // Lägger till measure controller
+        // var measureControl = new L.Control.Measure({
+        //     position: 'topleft', primaryLengthUnit: 'meters', secondaryLengthUnit: 'kilometers', primaryAreaUnit: 'sqmeters', secondaryAreaUnit: 'hectares'
+        //});
+        //measureControl.addTo(map);
+
+        // Experiment för att få bort measurement tool
+// Function to simulate a loading period
+function simulateLoadingPeriod() {
+    // Add a loading indicator (you can customize this part)
+    console.log("Loading...");
+    // Wait for 5 seconds (5000 milliseconds)
+    setTimeout(function() {
+        // Remove the loading indicator after 5 seconds
+        console.log("Loading finished.");
+    }, 5000);
+}
+// Skapa mätverktyget
+var measureControl = new L.Control.Measure({
+    position: 'topleft', primaryLengthUnit: 'meters', secondaryLengthUnit: 'kilometers', primaryAreaUnit: 'sqmeters', secondaryAreaUnit: 'hectares'
+});
+// Lägg till mätverktyget till kartan
+map.addControl(measureControl);
+//measureControl.addTo(map);
+      // Uppdatera mätverktygets synlighet när ett lager läggs till på kartan
+      map.on('overlayremove', function (eventLayer) {
+    //simulateLoadingPeriod();
+    if (eventLayer.name === 'Fastigheter') {
+        map.addControl(measureControl);
+    }
+});
+// Uppdatera mätverktygets synlighet när ett lager tas bort från kartan
+map.on('overlayadd', function (eventLayer) {
+    //simulateLoadingPeriod();
+    if (eventLayer.name === 'Fastigheter') {
+        var isVisible = map.hasLayer(map.getPane('pane_Fastigheter_1'));
+        if (!isVisible) {
+            map.removeControl(measureControl);
+        }
+    }
+});
+// Här tar experimentet slut
+
+        // Fixar utseende på ruler, rör inte
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0]
+            .innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0]
+            .className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+
+        // Ser till så att alla lager syns på kartan
+        function setBounds() {
+            if (bounds_group.getLayers().length) {
+                map.fitBounds(bounds_group.getBounds());
+            }
+        }
+
+        // Pane är att lägga till lager i kartan
+        map.createPane('pane_frg_web_0');
+        map.getPane('pane_frg_web_0').style.zIndex = 400;
+        // Lägger till en bildöverlägg (image overlay) på Leaflet-kartan. En bildöverlägg används för att visa en bild över kartan på en specifik geografisk plats.
+        var img_frg_web_0 = 'data/frg_web_0.png'; // Kör replace all för att byta bakgrund
+        var img_bounds_frg_web_0 = [[57.6816204956847,11.89511846957765],[57.70506499344157,11.938900735508613]];
+        var layer_frg_web_0 = new L.imageOverlay(img_frg_web_0,
+                                              img_bounds_frg_web_0,
+                                              {pane: 'pane_frg_web_0'});
+        bounds_group.addLayer(layer_frg_web_0);
+        map.addLayer(layer_frg_web_0);
+        // Funktionen ser till så samtliga polygoner får samma hantering för highlighting
+        function pop_Fastigheter_1(feature, layer) {
+            layer.on({
+                // mouseout: function (e) {
+                //     for (i in e.target._eventParents) {
+                //         e.target._eventParents[i].resetStyle(e.target);
+                //     }
+                // },
+                click: highlightFeature,
+            });
+            // <tr>\
+            //        <td colspan="2">' + (feature.properties['fid_fastig'] !== null ? autolinker.link(feature.properties['fid_fastig'].toLocaleString()) : '') + '</td>\
+            // </tr>\  autolinker.link(feature.properties['Area'].toLocaleString())
+            // Vad som ska vara i popupen och dess funktioner
+            // innan stod det för att kalla på arean autolinker.link(feature.properties['Area'].toLocaleString())
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">Markerad takyta: ' + (feature.properties['Area'] !== null ? (Math.round(feature.properties['Area'] * 10) / 10).toLocaleString() : '') + ' m&sup2</td>\
+                    </tr>\
+                </table>';
+            layer.bindPopup(popupContent, { maxHeight: 400 });
+            var popup = layer.getPopup();
+            var content = popup.getContent();
+            var updatedContent = removeEmptyRowsFromPopupContent(content, feature);
+            popup.setContent(updatedContent);
+        }
+        // Utseende för lager style_merged
+        function style_Fastigheter_1_0() {
+            return {
+                pane: 'pane_Fastigheter_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(133,182,111,1.0)',
+                interactive: true,
+            }
+        }
+        // Skapar ett lager som kallas för Pane
+        map.createPane('pane_Fastigheter_1');
+        map.getPane('pane_Fastigheter_1').style.zIndex = 401;
+        map.getPane('pane_Fastigheter_1').style['mix-blend-mode'] = 'normal';
+        var layer_Fastigheter_1 = new L.geoJson(json_Fastigheter_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Fastigheter_1',
+            layerName: 'layer_Fastigheter_1',
+            pane: 'pane_Fastigheter_1',
+            // onEachFeature är en parameter i Leaflet som används när du skapar en ny geojson-lager. Det låter dig definiera en funktion som ska köras för varje geoobjekt i det geojson-lagret.
+            onEachFeature: pop_Fastigheter_1,
+            style: style_Fastigheter_1_0,
+        });
+        bounds_group.addLayer(layer_Fastigheter_1);
+        map.addLayer(layer_Fastigheter_1);
+        //
+        // Gör exakt samma sak som för lagret "layer_merged" fast nu för byggnadsverk
+        //
+        function pop_Byggnader_2(feature, layer) {
+            layer.on({
+                // mouseout: function (e) {
+                //     for (i in e.target._eventParents) {
+                //         e.target._eventParents[i].resetStyle(e.target);
+                //     }
+                // },
+                // mouseover: highlightFeature,
+                click: highlightFeature
+            });
+
+            //        <tr>\
+            //          <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(feature.properties['fid'].toLocaleString()) : '') + '</td>\ 
+            //        </tr>\ 
+            // innan stod det för att kalla på arean autolinker.link(feature.properties['Area'].toLocaleString())
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">Markerad takyta: ' + (feature.properties['Area'] !== null ? (Math.round(feature.properties['Area'] * 10) / 10).toLocaleString() : '') + ' m&sup2</td>\
+                    </tr>\
+                </table>';
+            layer.bindPopup(popupContent, { maxHeight: 400 });
+            var popup = layer.getPopup();
+            var content = popup.getContent();
+            var updatedContent = removeEmptyRowsFromPopupContent(content, feature);
+            popup.setContent(updatedContent);
+        }
+
+        function style_Byggnader_2_0() {
+            return {
+                pane: 'pane_Byggnader_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(31,120,180,1.0)',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Byggnader_2');
+        map.getPane('pane_Byggnader_2').style.zIndex = 402;
+        map.getPane('pane_Byggnader_2').style['mix-blend-mode'] = 'normal';
+        var layer_Byggnader_2 = new L.geoJson(json_Byggnader_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Byggnader_2',
+            layerName: 'layer_Byggnader_2',
+            pane: 'pane_Byggnader_2',
+            onEachFeature: pop_Byggnader_2,
+            style: style_Byggnader_2_0,
+        });
+        bounds_group.addLayer(layer_Byggnader_2);
+        map.addLayer(layer_Byggnader_2);
+
+        function style_fastighetgrns_3_0() {
+            return {
+                pane: 'pane_fastighetgrns_3',
+                opacity: 0.9,
+                color: '#1E1A1A',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 0.5,
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        map.createPane('pane_fastighetgrns_3');
+        map.getPane('pane_fastighetgrns_3').style.zIndex = 403;
+        map.getPane('pane_fastighetgrns_3').style['mix-blend-mode'] = 'normal';
+        var layer_fastighetgrns_3 = new L.geoJson(json_fastighetgrns_3, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_fastighetgrns_3',
+            layerName: 'layer_fastighetgrns_3',
+            pane: 'pane_fastighetgrns_3',
+            //onEachFeature: pop_fastighetgrns_3,
+            style: style_fastighetgrns_3_0,
+        });
+        bounds_group.addLayer(layer_fastighetgrns_3);
+        map.addLayer(layer_fastighetgrns_3);
+        //
+        // Fortsättning
+        //
+        // Skapar layercontroll användargränsitt setup
+        var baseMaps = {};
+        L.control.layers(baseMaps, {"Fastighetgränser": layer_fastighetgrns_3, "Byggnader": layer_Byggnader_2, "Fastigheter" : layer_Fastigheter_1, "Lantmäteriets topografiska webkarta": layer_frg_web_0}).addTo(map);
+        setBounds();
+        // Denna koduttryck utökar Leaflets L.ImageOverlay-klass genom att lägga till en ny metod getBounds(). Metoden getBounds() är avsedd att returnera den geografiska utbredningen (gränserna) för det överlagrade bilden.
+        // getBounds(): = Returns the geographical bounds visible in the current map view
+        L.ImageOverlay.include({
+            getBounds: function () {
+                return this._bounds;
+            }
+        });
+        
+        map.on('click',
+            function (e) {
+                var coord = e.latlng.toString().split(',');
+                var lat = coord[0].split('(');
+                var lng = coord[1].split(')');
+                console.log("You clicked the map at latitude: " + lat[1] + " and longitude:" + lng[0]);
+                // reset layer color on "click"
+                layer_Fastigheter_1.resetStyle();
+                layer_Byggnader_2.resetStyle();
+                // Använder jQuery för att välja alla element med klassen layer-measure-resultarea och tar bort dem från DOM (Document Object Model). Det betyder att alla element som har denna klass tas bort från webbsidan.
+                $(".layer-measure-resultarea").remove();
+                if (previousElement) {
+                    for (i in previousElement._eventParents) {
+                        previousElement._eventParents[i].resetStyle(previousElement);
+                    }
+                }
+            });
+
+        // Kod för att göra polygonen
+        let layersContainingPoint = []
+        // Could write map.on('measurefinish', function(data) {
+        map.on('measurefinish', (data) => {
+            console.log(data);
+            // Get all layers
+            const layers = map._layers
+            // To array and filter by MultiPolygon
+            const layersArray = Object.values(layers)
+            const layersFilteredByMultiPolygon = layersArray.filter(layer => layer.feature?.geometry.type === 'MultiPolygon')
+            // Get user selected point array
+            const userSelectedPoints = data.points
+            // Convert user selected points to an array of numbers with lng and lat
+            const userSelectedPointsArray = userSelectedPoints.map(point => [point.lng, point.lat])
+            // Add the first point to the end of the array to close the polygon\
+            userSelectedPointsArray.push(userSelectedPointsArray[0])
+            // Using Turf js get a list of all layers that contain the user selected point
+            layersContainingPoint = layersFilteredByMultiPolygon.filter(layer => {
+                // Return turf.intersect(layer.feature.geometry.coordinates[0][0], userSelectedPointsArray)
+                return turf.intersect(turf.polygon([userSelectedPointsArray]), turf.polygon([layer.feature.geometry.coordinates[0][0]]))
+            })
+            // Highlight the layers that contain the user selected point
+            var total_area = 0;
+            layersContainingPoint.forEach(layer => {
+                if (layer.feature.geometry.type === 'LineString') {
+                    layer.setStyle({
+                        color: '#fab12a',
+                    });
+                } else {
+                    layer.setStyle({
+                        fillColor: '#fab12a',
+                        fillOpacity: 1
+                    });
+                }
+                if (!isNaN(layer.feature.properties.Area)) {
+                    total_area += layer.feature.properties.Area
+                }
+            })
+            console.log("Total Roof Area: " + total_area)
+            // Kollar först så att popup-content är klart innan den kör
+            // OBS ! Användaren måste ansätta enbart ett lager annars blir det fel
+            $('.leaflet-popup-content').ready(function () {
+                console.log($('.leaflet-popup-content').html())
+                let roundedTotalArea = total_area.toFixed(1)
+                // change the content of the popup
+                $('.leaflet-popup-content').html(`<p></p><p>Total markerad takyta: ${roundedTotalArea} m&sup2</p><p></p>`)
+            });
+        })
+    </script>
+</body>
+</html>
