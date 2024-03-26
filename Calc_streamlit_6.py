@@ -12,9 +12,9 @@ def GetData(magazinsize, water_use, arean):
   '''
   Read Csv.files
   '''
-  df_365 = pd.read_csv('SMHI\SMHI_modified3.csv')
-  df_med_last_14 = pd.read_csv('SMHI\SMHI_2014_2020.csv',  delimiter=";", decimal=",")
-  #df_med_last_14 = pd.read_csv('SMHI\SMHI_2014_2020_test.csv',  delimiter=";", decimal=",")
+  df_365 = pd.read_csv('SMHI/SMHI_modified3.csv')
+  df_med_last_14 = pd.read_csv('SMHI/SMHI_2014_2020.csv',  delimiter=";", decimal=",")
+  #df_med_last_14 = pd.read_csv('SMHI/SMHI_2014_2020_test.csv',  delimiter=";", decimal=",")
   df_med_last_14.insert(0, 'ID', range(len(df_med_last_14))) # Lägger till ID i första kolumnen
   """
   Load data into variable
