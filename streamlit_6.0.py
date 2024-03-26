@@ -65,7 +65,7 @@ st.markdown('<hr style="border: 1px solid green;">', unsafe_allow_html=True)
 #"""""""""
 
 # Read the CSV file into a DataFrame
-df = pd.read_csv('SMHI\SMHI_modified3.csv')
+df = pd.read_csv('SMHI/SMHI_modified3.csv')
 day = df['Dagar']
 prec = df['Precip Medel']
 temp = df['Temperature Medel']
