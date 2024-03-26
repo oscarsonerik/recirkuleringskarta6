@@ -165,7 +165,7 @@ Divide into month distribution
 '''
 def MonthDisp(avg_year_365):
   # Create lists over the distribution over the month from the average year set.
-  df_365 = pd.read_csv('SMHI\SMHI_modified3.csv')
+  df_365 = pd.read_csv('SMHI/SMHI_modified3.csv')
   mån = df_365['Månad']
   antal_dagar_månad = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
   my_365 = [i for i in range(1, 366)]
