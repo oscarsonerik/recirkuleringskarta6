@@ -254,8 +254,8 @@ if __name__ == "__main__":
   print(f"Mängd regnvatten som inte får plats i vattentanken:", round(sum(avg_year_365[1]),3), " m³.\n")
   print(f'Din input ger {round(sum(avg_year_365[0]),3)} m³ utnyttjad regnvatten per år.') # Blir inte exakt rätt då vi inte hämtar något vatten första dagen om det inte är någon nederbörd. First data dilemma.
 #print("Mängd regnvatten kvar i tanken efter körning:", round((svar[2]/9),4), " m³.")
-  procent_upptag = sum(avg_year_365[0]) / (wateruseday*365)
-  print(f'Regnvatten står för {round(procent_upptag,4)*100} % av önskat behov under året.')
+  #procent_upptag = sum(avg_year_365[0]) / (wateruseday*365)
+  #print(f'Regnvatten står för {round(procent_upptag,4)*100} % av önskat behov under året.')
   print(f'Mängd dricksvatten taget från kran {round((wateruseday*365) - sum(avg_year_365[0]),3)} m³/år.')
   
   print('')
