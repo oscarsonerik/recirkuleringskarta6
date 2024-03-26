@@ -196,7 +196,7 @@ st.pyplot(plt.gcf())
 
 # Uppehållstid vid total omblandning: Volym/Flöde, ex. m3/m3/dag
 
-df_med_last_14 = pd.read_csv('SMHI\SMHI_2014_2020.csv',  delimiter=";", decimal=",")
+df_med_last_14 = pd.read_csv('SMHI/SMHI_2014_2020.csv',  delimiter=";", decimal=",")
 years = df_med_last_14['År siffra']
 days_per_year = 365
 
